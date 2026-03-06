@@ -21,7 +21,7 @@ def build_database():
         try:
             embedding = DeepFace.represent(
                 img_path=path,
-                model_name="Facenet512",
+                model_name="SFace",
                 enforce_detection=False
             )[0]["embedding"]
 
@@ -41,7 +41,7 @@ def search_face(query_img):
 
     query_embedding = DeepFace.represent(
         img_path=query_img,
-        model_name="Facenet512",
+        model_name="SFace",
         enforce_detection=False
     )[0]["embedding"]
 
