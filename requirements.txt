@@ -1,0 +1,8 @@
+gradio==4.36.1
+huggingface_hub==0.23.5
+deepface
+tensorflow-cpu
+tf-keras
+numpy
+pillow
+scikit-learn
