@@ -8,9 +8,10 @@ DB_PATH = "faces"
 embeddings = []
 image_paths = []
 
-def # build_database():
-    global embeddings, image_paths
-
+def build_database():
+    # build_database()
+    global embeddings, imag
+    
     embeddings = []
     image_paths = []
 
@@ -34,6 +35,9 @@ def cosine_similarity(a, b):
     return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
 
 def search_face(query_img):
+
+    if len(embeddings) == 0:
+        build_database()
 
     query_embedding = DeepFace.represent(
         img_path=query_img,
