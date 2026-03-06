@@ -8,7 +8,7 @@ DB_PATH = "faces"
 embeddings = []
 image_paths = []
 
-def build_database():
+def # build_database():
     global embeddings, image_paths
 
     embeddings = []
@@ -76,6 +76,6 @@ with gr.Blocks() as demo:
         outputs=[gallery, results]
     )
 
-demo.launch()
+demo.launch(server_name="0.0.0.0", server_port=10000)
 
 # visual scout update
