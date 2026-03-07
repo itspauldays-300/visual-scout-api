@@ -79,7 +79,27 @@ with gr.Blocks() as demo:
         inputs=input_img,
         outputs=[gallery, results]
     )
+from flask import Flask, request, jsonify
+import tempfile
+import os
 
+app = Flask(__name__)
+
+@app.route("/search", methods=["POST"])
+def search():
+    if "image" not in request.files:
+        return jsonify({"error": "No image uploaded"}), 400
+
+    file = request.files["image"]
+
+    temp_path = os.path.join(tempfile.gettempdir(), file.filename)
+    file.save(temp_path)
+
+    results = search_face(temp_path)   # your existing function
+
+    return jsonify({
+        "matches": results[:5]
+    })
 demo.launch(server_name="0.0.0.0", server_port=10000)
 
 # visual scout update
