@@ -1,49 +1,107 @@
 import gradio as gr
-import os
 import numpy as np
 from deepface import DeepFace
 from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 import tempfile
+import os
+import requests
 import uvicorn
 
-DB_PATH = "faces"
+# -------------------------
+# DEMO FACE POOL (Unsplash)
+# -------------------------
+
+FACE_POOL = [
+"https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=600&h=800&fit=crop",
+"https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=600&h=800&fit=crop",
+"https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=600&h=800&fit=crop",
+"https://images.unsplash.com/photo-1529626455594-4ff0802cfb7e?w=600&h=800&fit=crop",
+"https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=600&h=800&fit=crop",
+"https://images.unsplash.com/photo-1531123897727-8f129e1688ce?w=600&h=800&fit=crop",
+"https://images.unsplash.com/photo-1508214751196-bcfd4ca60f91?w=600&h=800&fit=crop",
+"https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=600&h=800&fit=crop",
+"https://images.unsplash.com/photo-1517841905240-472988babdf9?w=600&h=800&fit=crop",
+"https://images.unsplash.com/photo-1520813792240-56fc4a3765a7?w=600&h=800&fit=crop"
+]
+
+CACHE_DIR = "face_cache"
 
 embeddings = []
 image_paths = []
 
 
+# -------------------------
+# DOWNLOAD FACES
+# -------------------------
+
+def download_faces():
+
+    os.makedirs(CACHE_DIR, exist_ok=True)
+
+    paths = []
+
+    for i, url in enumerate(FACE_POOL):
+
+        file_path = f"{CACHE_DIR}/face_{i}.jpg"
+
+        if not os.path.exists(file_path):
+
+            r = requests.get(url)
+
+            with open(file_path, "wb") as f:
+                f.write(r.content)
+
+        paths.append(file_path)
+
+    return paths
+
+
+# -------------------------
+# BUILD DATABASE
+# -------------------------
+
 def build_database():
+
     global embeddings, image_paths
 
     embeddings = []
     image_paths = []
 
-    for file in os.listdir(DB_PATH):
-        path = os.path.join(DB_PATH, file)
+    faces = download_faces()
+
+    for path in faces:
 
         try:
-            embedding = DeepFace.represent(
+
+            emb = DeepFace.represent(
                 img_path=path,
                 model_name="SFace",
                 enforce_detection=False
             )[0]["embedding"]
 
-            embeddings.append(embedding)
+            embeddings.append(emb)
             image_paths.append(path)
 
         except:
             pass
 
+    print("Faces loaded:", len(image_paths))
+
+
+# -------------------------
+# SIMILARITY
+# -------------------------
 
 def cosine_similarity(a, b):
     return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
 
 
-def search_face(query_img):
+# -------------------------
+# SEARCH FUNCTION
+# -------------------------
 
-    if len(embeddings) == 0:
-        build_database()
+def search_face(query_img):
 
     query_embedding = DeepFace.represent(
         img_path=query_img,
@@ -54,14 +112,17 @@ def search_face(query_img):
     scores = []
 
     for i, emb in enumerate(embeddings):
+
         similarity = cosine_similarity(query_embedding, emb)
+
         scores.append((similarity, image_paths[i]))
 
     scores.sort(reverse=True)
 
     results = []
 
-    for score, path in scores[:10]:
+    for score, path in scores[:6]:
+
         percent = round(score * 100, 2)
 
         results.append({
@@ -72,15 +133,16 @@ def search_face(query_img):
     return results
 
 
-# build embeddings at startup
+# Build database at startup
 build_database()
 
 
-# -----------------------
-# GRADIO INTERFACE
-# -----------------------
+# -------------------------
+# GRADIO UI
+# -------------------------
 
 with gr.Blocks() as demo:
+
     gr.Markdown("# Visual Scout Face Search")
 
     input_img = gr.Image(type="filepath")
@@ -90,6 +152,7 @@ with gr.Blocks() as demo:
     results_box = gr.Textbox()
 
     def ui_search(img):
+
         results = search_face(img)
 
         images = [r["image"] for r in results]
@@ -104,13 +167,12 @@ with gr.Blocks() as demo:
     )
 
 
-# -----------------------
+# -------------------------
 # FASTAPI SERVER
-# -----------------------
+# -------------------------
 
 app = FastAPI()
 
-# enable CORS so frontend can call API
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -119,13 +181,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# mount gradio UI
 app = gr.mount_gradio_app(app, demo, path="/")
 
 
-# -----------------------
+# -------------------------
 # API ENDPOINT
-# -----------------------
+# -------------------------
 
 @app.post("/api/search")
 async def api_search(image: UploadFile = File(...)):
@@ -137,15 +198,15 @@ async def api_search(image: UploadFile = File(...)):
 
     results = search_face(temp_path)
 
-    return {
-        "results": results
-    }
+    return {"results": results}
 
 
-# -----------------------
+# -------------------------
 # RUN SERVER
-# -----------------------
+# -------------------------
 
 if __name__ == "__main__":
+
     port = int(os.environ.get("PORT", 10000))
+
     uvicorn.run(app, host="0.0.0.0", port=port)
