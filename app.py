@@ -2,8 +2,9 @@ import gradio as gr
 import os
 import numpy as np
 from deepface import DeepFace
-from fastapi import UploadFile, File
+from fastapi import FastAPI, UploadFile, File
 import tempfile
+import uvicorn
 
 DB_PATH = "faces"
 
@@ -68,13 +69,13 @@ def search_face(query_img):
     return gallery, "\n".join(labels)
 
 
-# Build database once on startup
+# build embeddings when server starts
 build_database()
 
 
-# -------------------------------
+# -------------------------
 # GRADIO UI
-# -------------------------------
+# -------------------------
 
 with gr.Blocks() as demo:
     gr.Markdown("# Visual Scout Face Search")
@@ -92,11 +93,19 @@ with gr.Blocks() as demo:
     )
 
 
-# -------------------------------
-# API ENDPOINT FOR LOVABLE
-# -------------------------------
+# -------------------------
+# FASTAPI SERVER
+# -------------------------
 
-@demo.app.post("/search")
+app = FastAPI()
+
+
+# mount gradio UI
+app = gr.mount_gradio_app(app, demo, path="/")
+
+
+# API endpoint for Lovable
+@app.post("/search")
 async def search(image: UploadFile = File(...)):
 
     temp_path = os.path.join(tempfile.gettempdir(), image.filename)
@@ -112,8 +121,9 @@ async def search(image: UploadFile = File(...)):
     }
 
 
-# -------------------------------
-# LAUNCH SERVER
-# -------------------------------
+# -------------------------
+# RUN SERVER
+# -------------------------
 
-demo.launch(server_name="0.0.0.0", server_port=10000)
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=10000)
