@@ -3,6 +3,7 @@ import os
 import numpy as np
 from deepface import DeepFace
 from fastapi import FastAPI, UploadFile, File
+from fastapi.middleware.cors import CORSMiddleware
 import tempfile
 import uvicorn
 
@@ -58,24 +59,26 @@ def search_face(query_img):
 
     scores.sort(reverse=True)
 
-    gallery = []
-    labels = []
+    results = []
 
     for score, path in scores[:10]:
         percent = round(score * 100, 2)
-        gallery.append(path)
-        labels.append(f"{percent}% match")
 
-    return gallery, "\n".join(labels)
+        results.append({
+            "image": path,
+            "score": percent
+        })
+
+    return results
 
 
-# build embeddings once on startup
+# build embeddings at startup
 build_database()
 
 
-# -------------------
+# -----------------------
 # GRADIO INTERFACE
-# -------------------
+# -----------------------
 
 with gr.Blocks() as demo:
     gr.Markdown("# Visual Scout Face Search")
@@ -84,45 +87,64 @@ with gr.Blocks() as demo:
     btn = gr.Button("Search")
 
     gallery = gr.Gallery()
-    results = gr.Textbox()
+    results_box = gr.Textbox()
+
+    def ui_search(img):
+        results = search_face(img)
+
+        images = [r["image"] for r in results]
+        labels = "\n".join([f'{r["score"]}% match' for r in results])
+
+        return images, labels
 
     btn.click(
-        search_face,
+        ui_search,
         inputs=input_img,
-        outputs=[gallery, results]
+        outputs=[gallery, results_box]
     )
 
 
-# -------------------
+# -----------------------
 # FASTAPI SERVER
-# -------------------
+# -----------------------
 
 app = FastAPI()
+
+# enable CORS so frontend can call API
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # mount gradio UI
 app = gr.mount_gradio_app(app, demo, path="/")
 
 
-# API endpoint for Lovable
+# -----------------------
+# API ENDPOINT
+# -----------------------
+
 @app.post("/api/search")
-async def search(image: UploadFile = File(...)):
+async def api_search(image: UploadFile = File(...)):
 
     temp_path = os.path.join(tempfile.gettempdir(), image.filename)
 
     with open(temp_path, "wb") as f:
         f.write(await image.read())
 
-    gallery, labels = search_face(temp_path)
+    results = search_face(temp_path)
 
     return {
-        "matches": gallery,
-        "labels": labels
+        "results": results
     }
 
 
-# -------------------
+# -----------------------
 # RUN SERVER
-# -------------------
+# -----------------------
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
