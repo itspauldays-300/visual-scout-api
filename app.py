@@ -79,27 +79,40 @@ with gr.Blocks() as demo:
         inputs=input_img,
         outputs=[gallery, results]
     )
-from flask import Flask, request, jsonify
+from fastapi import UploadFile, File
 import tempfile
-import os
 
-app = Flask(__name__)
+@demo.app.post("/search")
+async def search(image: UploadFile = File(...)):
 
-@app.route("/search", methods=["POST"])
-def search():
-    if "image" not in request.files:
-        return jsonify({"error": "No image uploaded"}), 400
+    temp_path = os.path.join(tempfile.gettempdir(), image.filename)
 
-    file = request.files["image"]
+    with open(temp_path, "wb") as f:
+        f.write(await image.read())
 
-    temp_path = os.path.join(tempfile.gettempdir(), file.filename)
-    file.save(temp_path)
+    gallery, labels = search_face(temp_path)
 
-    results = search_face(temp_path)   # your existing function
+    return {
+        "matches": gallery,
+        "labels": labels
+    }from fastapi import UploadFile, File
+import tempfile
 
-    return jsonify({
-        "matches": results[:5]
-    })
+@demo.app.post("/search")
+async def search(image: UploadFile = File(...)):
+
+    temp_path = os.path.join(tempfile.gettempdir(), image.filename)
+
+    with open(temp_path, "wb") as f:
+        f.write(await image.read())
+
+    gallery, labels = search_face(temp_path)
+
+    return {
+        "matches": gallery,
+        "labels": labels
+    }
+    
 demo.launch(server_name="0.0.0.0", server_port=10000)
 
 # visual scout update
