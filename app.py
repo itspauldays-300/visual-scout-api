@@ -2,16 +2,18 @@ import gradio as gr
 import os
 import numpy as np
 from deepface import DeepFace
+from fastapi import UploadFile, File
+import tempfile
 
 DB_PATH = "faces"
 
 embeddings = []
 image_paths = []
 
+
 def build_database():
-    # build_database()
-    global embeddings, imag
-    
+    global embeddings, image_paths
+
     embeddings = []
     image_paths = []
 
@@ -31,8 +33,10 @@ def build_database():
         except:
             pass
 
+
 def cosine_similarity(a, b):
     return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
+
 
 def search_face(query_img):
 
@@ -63,7 +67,14 @@ def search_face(query_img):
 
     return gallery, "\n".join(labels)
 
+
+# Build database once on startup
 build_database()
+
+
+# -------------------------------
+# GRADIO UI
+# -------------------------------
 
 with gr.Blocks() as demo:
     gr.Markdown("# Visual Scout Face Search")
@@ -79,24 +90,11 @@ with gr.Blocks() as demo:
         inputs=input_img,
         outputs=[gallery, results]
     )
-from fastapi import UploadFile, File
-import tempfile
 
-@demo.app.post("/search")
-async def search(image: UploadFile = File(...)):
 
-    temp_path = os.path.join(tempfile.gettempdir(), image.filename)
-
-    with open(temp_path, "wb") as f:
-        f.write(await image.read())
-
-    gallery, labels = search_face(temp_path)
-
-    return {
-        "matches": gallery,
-        "labels": labels
-    }from fastapi import UploadFile, File
-import tempfile
+# -------------------------------
+# API ENDPOINT FOR LOVABLE
+# -------------------------------
 
 @demo.app.post("/search")
 async def search(image: UploadFile = File(...)):
@@ -112,7 +110,10 @@ async def search(image: UploadFile = File(...)):
         "matches": gallery,
         "labels": labels
     }
-    
-demo.launch(server_name="0.0.0.0", server_port=10000)
 
-# visual scout update
+
+# -------------------------------
+# LAUNCH SERVER
+# -------------------------------
+
+demo.launch(server_name="0.0.0.0", server_port=10000)
