@@ -69,13 +69,13 @@ def search_face(query_img):
     return gallery, "\n".join(labels)
 
 
-# build embeddings when server starts
+# build embeddings once on startup
 build_database()
 
 
-# -------------------------
-# GRADIO UI
-# -------------------------
+# -------------------
+# GRADIO INTERFACE
+# -------------------
 
 with gr.Blocks() as demo:
     gr.Markdown("# Visual Scout Face Search")
@@ -93,19 +93,18 @@ with gr.Blocks() as demo:
     )
 
 
-# -------------------------
+# -------------------
 # FASTAPI SERVER
-# -------------------------
+# -------------------
 
 app = FastAPI()
-
 
 # mount gradio UI
 app = gr.mount_gradio_app(app, demo, path="/")
 
 
 # API endpoint for Lovable
-@app.post("/search")
+@app.post("/api/search")
 async def search(image: UploadFile = File(...)):
 
     temp_path = os.path.join(tempfile.gettempdir(), image.filename)
@@ -121,9 +120,10 @@ async def search(image: UploadFile = File(...)):
     }
 
 
-# -------------------------
+# -------------------
 # RUN SERVER
-# -------------------------
+# -------------------
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=10000)
+    port = int(os.environ.get("PORT", 10000))
+    uvicorn.run(app, host="0.0.0.0", port=port)
