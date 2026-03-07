@@ -1,12 +1,21 @@
-import gradio as gr
-import numpy as np
-from deepface import DeepFace
 from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
+from deepface import DeepFace
+import numpy as np
 import tempfile
-import os
 import requests
+import os
 import uvicorn
+
+app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # -------------------------
 # DEMO FACE POOL (Unsplash)
@@ -25,68 +34,26 @@ FACE_POOL = [
 "https://images.unsplash.com/photo-1520813792240-56fc4a3765a7?w=600&h=800&fit=crop"
 ]
 
-CACHE_DIR = "face_cache"
-
-embeddings = []
-image_paths = []
+CACHE_DIR = "faces"
+os.makedirs(CACHE_DIR, exist_ok=True)
 
 
 # -------------------------
-# DOWNLOAD FACES
+# DOWNLOAD FACE
 # -------------------------
 
-def download_faces():
+def download_face(url, index):
 
-    os.makedirs(CACHE_DIR, exist_ok=True)
+    path = f"{CACHE_DIR}/face_{index}.jpg"
 
-    paths = []
+    if not os.path.exists(path):
 
-    for i, url in enumerate(FACE_POOL):
+        r = requests.get(url)
 
-        file_path = f"{CACHE_DIR}/face_{i}.jpg"
+        with open(path, "wb") as f:
+            f.write(r.content)
 
-        if not os.path.exists(file_path):
-
-            r = requests.get(url)
-
-            with open(file_path, "wb") as f:
-                f.write(r.content)
-
-        paths.append(file_path)
-
-    return paths
-
-
-# -------------------------
-# BUILD DATABASE
-# -------------------------
-
-def build_database():
-
-    global embeddings, image_paths
-
-    embeddings = []
-    image_paths = []
-
-    faces = download_faces()
-
-    for path in faces:
-
-        try:
-
-            emb = DeepFace.represent(
-                img_path=path,
-                model_name="SFace",
-                enforce_detection=False
-            )[0]["embedding"]
-
-            embeddings.append(emb)
-            image_paths.append(path)
-
-        except:
-            pass
-
-    print("Faces loaded:", len(image_paths))
+    return path
 
 
 # -------------------------
@@ -98,7 +65,7 @@ def cosine_similarity(a, b):
 
 
 # -------------------------
-# SEARCH FUNCTION
+# SEARCH
 # -------------------------
 
 def search_face(query_img):
@@ -109,86 +76,38 @@ def search_face(query_img):
         enforce_detection=False
     )[0]["embedding"]
 
-    scores = []
-
-    for i, emb in enumerate(embeddings):
-
-        similarity = cosine_similarity(query_embedding, emb)
-
-        scores.append((similarity, image_paths[i]))
-
-    scores.sort(reverse=True)
-
     results = []
 
-    for score, path in scores[:6]:
+    for i, url in enumerate(FACE_POOL):
+
+        face_path = download_face(url, i)
+
+        emb = DeepFace.represent(
+            img_path=face_path,
+            model_name="SFace",
+            enforce_detection=False
+        )[0]["embedding"]
+
+        score = cosine_similarity(query_embedding, emb)
 
         percent = round(score * 100, 2)
 
         results.append({
-            "image": path,
+            "image": url,
             "score": percent
         })
 
-    return results
+    results.sort(key=lambda x: x["score"], reverse=True)
 
-
-# Build database at startup
-build_database()
-
-
-# -------------------------
-# GRADIO UI
-# -------------------------
-
-with gr.Blocks() as demo:
-
-    gr.Markdown("# Visual Scout Face Search")
-
-    input_img = gr.Image(type="filepath")
-    btn = gr.Button("Search")
-
-    gallery = gr.Gallery()
-    results_box = gr.Textbox()
-
-    def ui_search(img):
-
-        results = search_face(img)
-
-        images = [r["image"] for r in results]
-        labels = "\n".join([f'{r["score"]}% match' for r in results])
-
-        return images, labels
-
-    btn.click(
-        ui_search,
-        inputs=input_img,
-        outputs=[gallery, results_box]
-    )
+    return results[:6]
 
 
 # -------------------------
-# FASTAPI SERVER
-# -------------------------
-
-app = FastAPI()
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-app = gr.mount_gradio_app(app, demo, path="/")
-
-
-# -------------------------
-# API ENDPOINT
+# API
 # -------------------------
 
 @app.post("/api/search")
+
 async def api_search(image: UploadFile = File(...)):
 
     temp_path = os.path.join(tempfile.gettempdir(), image.filename)
@@ -202,7 +121,7 @@ async def api_search(image: UploadFile = File(...)):
 
 
 # -------------------------
-# RUN SERVER
+# RUN
 # -------------------------
 
 if __name__ == "__main__":
