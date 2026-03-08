@@ -14,7 +14,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Demo face pool
 FACE_POOL = [
     "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=600",
     "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=600",
@@ -31,27 +30,10 @@ def root():
 @app.post("/api/search")
 async def api_search(image: UploadFile = File(...)):
 
-    # read uploaded image
-    contents = await image.read()
+    await image.read()
 
-    results = []
+    matches = []
 
-    # simulate similarity scoring
     for url in FACE_POOL:
 
-        score = random.randint(60, 95)
-
-        results.append({
-            "image": url,
-            "score": score
-        })
-
-    # sort by score
-    results = sorted(results, key=lambda x: x["score"], reverse=True)
-
-    return results
-
-
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))
-    uvicorn.run("app:app", host="0.0.0.0", port=port)
+        score
