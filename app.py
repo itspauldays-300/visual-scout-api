@@ -20,7 +20,9 @@ FACE_POOL = [
     "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=600",
     "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=600",
     "https://images.unsplash.com/photo-1520813792240-56fc4a3765a7?w=600",
-    "https://images.unsplash.com/photo-1531123897727-8f129e1688ce?w=600"
+    "https://images.unsplash.com/photo-1531123897727-8f129e1688ce?w=600",
+    "https://images.unsplash.com/photo-1521119989659-a83eee488004?w=600",
+    "https://images.unsplash.com/photo-1529626455594-4ff0802cfb7e?w=600"
 ]
 
 @app.get("/")
@@ -30,24 +32,30 @@ def root():
 @app.post("/api/search")
 async def api_search(image: UploadFile = File(...)):
 
+    # read uploaded file
     await image.read()
 
-    matches = []
+    results = []
 
     for url in FACE_POOL:
         score = random.randint(60, 95)
 
-        matches.append({
+        results.append({
             "image": url,
             "score": score
         })
 
-    matches = sorted(matches, key=lambda x: x["score"], reverse=True)
+    results = sorted(results, key=lambda x: x["score"], reverse=True)
 
-    return {"matches": matches}
+    # return multiple formats so Lovable always reads it
+    return {
+        "matches": results,
+        "results": results,
+        "faces": results,
+        "data": results
+    }
 
 
-# THIS BLOCK STARTS THE SERVER
 if __name__ == "__main__":
 
     port = int(os.environ.get("PORT", 10000))
