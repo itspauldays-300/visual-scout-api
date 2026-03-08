@@ -1,7 +1,8 @@
-fastapi
-uvicorn
-deepface
-opencv-python
-numpy
-requests
-scikit-learn
+fastapi==0.110.0
+uvicorn[standard]==0.27.1
+deepface==0.0.79
+opencv-python-headless==4.9.0.80
+numpy==1.26.4
+requests==2.31.0
+scikit-learn==1.4.1
+python-multipart==0.0.9
