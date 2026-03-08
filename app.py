@@ -47,18 +47,17 @@ def get_embedding(img):
 @app.post("/api/search")
 async def api_search(image: UploadFile = File(...)):
 
-    # Save uploaded image temporarily
-    temp = tempfile.NamedTemporaryFile(delete=False)
-    temp.write(await image.read())
-    temp.close()
+    try:
 
-    query_embedding = get_embedding(temp.name)
+        temp = tempfile.NamedTemporaryFile(delete=False)
+        temp.write(await image.read())
+        temp.close()
 
-    results = []
+        query_embedding = get_embedding(temp.name)
 
-    for url in FACE_POOL:
+        results = []
 
-        try:
+        for url in FACE_POOL:
 
             face_img = url_to_image(url)
 
@@ -76,9 +75,10 @@ async def api_search(image: UploadFile = File(...)):
                 "score": score
             })
 
-        except Exception:
-            continue
+        results.sort(key=lambda x: x["score"], reverse=True)
 
-    results.sort(key=lambda x: x["score"], reverse=True)
+        return results
 
-    return results
+    except Exception as e:
+
+        return {"error": str(e)}
