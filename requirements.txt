@@ -1,8 +1,7 @@
-gradio==4.36.1
-huggingface_hub==0.23.5
+fastapi
+uvicorn
 deepface
-tensorflow-cpu
-tf-keras
+opencv-python
 numpy
-pillow
+requests
 scikit-learn
