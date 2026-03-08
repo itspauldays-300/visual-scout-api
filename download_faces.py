@@ -1,78 +1,39 @@
-"""
-download_faces.py
+def search_faces(query_img):
 
-Downloads large numbers of portrait-style faces from Unsplash to build
-a dataset for face-similarity search (e.g., with DeepFace + FAISS).
+    FACE_POOL = [
+        "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=600&h=800&fit=crop",
+        "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=600&h=800&fit=crop",
+        "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=600&h=800&fit=crop",
+        "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=600&h=800&fit=crop",
+        "https://images.unsplash.com/photo-1520813792240-56fc4a3765a7?w=600&h=800&fit=crop",
+        "https://images.unsplash.com/photo-1531123897727-8f129e1688ce?w=600&h=800&fit=crop"
+    ]
 
-INSTRUCTIONS
-1. Get a free Unsplash API key: https://unsplash.com/developers
-2. Replace YOUR_UNSPLASH_ACCESS_KEY below.
-3. Run: python download_faces.py
-4. Images will be saved into ./faces/
+    query_embedding = DeepFace.represent(
+        img_path=query_img,
+        model_name="SFace",
+        enforce_detection=False
+    )[0]["embedding"]
 
-Optional:
-- Change TOTAL_PAGES to control dataset size.
-"""
+    results = []
 
-import os
-import requests
-import time
+    for url in FACE_POOL:
 
-ACCESS_KEY = "zwu9S2B2-4UPlMlFXLnatuelCiu5KRrUtqURjVrU5n4"
+        emb = DeepFace.represent(
+            img_path=url,
+            model_name="SFace",
+            enforce_detection=False
+        )[0]["embedding"]
 
-SEARCH_URL = "https://api.unsplash.com/search/photos"
+        score = cosine_similarity(query_embedding, emb)
 
-QUERY = "portrait face person"
-PER_PAGE = 30
-TOTAL_PAGES = 40  # 40 pages * 30 images ≈ 1200 images
+        percent = round(score * 100, 2)
 
-SAVE_FOLDER = "faces"
+        results.append({
+            "image": url,
+            "score": percent
+        })
 
-os.makedirs(SAVE_FOLDER, exist_ok=True)
+    results.sort(key=lambda x: x["score"], reverse=True)
 
-headers = {
-    "Authorization": f"Client-ID {ACCESS_KEY}"
-}
-
-count = 0
-
-for page in range(1, TOTAL_PAGES + 1):
-
-    params = {
-        "query": QUERY,
-        "page": page,
-        "per_page": PER_PAGE,
-        "orientation": "portrait"
-    }
-
-    response = requests.get(SEARCH_URL, headers=headers, params=params)
-
-    if response.status_code != 200:
-        print("API error:", response.text)
-        break
-
-    data = response.json()
-
-    for photo in data["results"]:
-
-        img_url = photo["urls"]["regular"]
-
-        try:
-            img_data = requests.get(img_url).content
-
-            filename = os.path.join(SAVE_FOLDER, f"face_{count}.jpg")
-
-            with open(filename, "wb") as f:
-                f.write(img_data)
-
-            print("Saved", filename)
-
-            count += 1
-
-        except Exception as e:
-            print("Skipped image:", e)
-
-    time.sleep(1)
-
-print("\nDownload complete.")
-print("Total images:", count)
+    return results
