@@ -1,11 +1,11 @@
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from deepface import DeepFace
 import numpy as np
-import tempfile
+import cv2
 import requests
-import os
-import uvicorn
+import tempfile
+from sklearn.metrics.pairwise import cosine_similarity
 
 app = FastAPI()
 
@@ -17,80 +17,42 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# -------------------------
-# DEMO FACE POOL (Unsplash)
-# -------------------------
-
+# Demo face pool (same style images your app already uses)
 FACE_POOL = [
-"https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=600&h=800&fit=crop",
-"https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=600&h=800&fit=crop",
-"https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=600&h=800&fit=crop",
-"https://images.unsplash.com/photo-1529626455594-4ff0802cfb7e?w=600&h=800&fit=crop",
-"https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=600&h=800&fit=crop",
-"https://images.unsplash.com/photo-1531123897727-8f129e1688ce?w=600&h=800&fit=crop",
-"https://images.unsplash.com/photo-1508214751196-bcfd4ca60f91?w=600&h=800&fit=crop",
-"https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=600&h=800&fit=crop",
-"https://images.unsplash.com/photo-1517841905240-472988babdf9?w=600&h=800&fit=crop",
-"https://images.unsplash.com/photo-1520813792240-56fc4a3765a7?w=600&h=800&fit=crop"
+    "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=600&h=800&fit=crop",
+    "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=600&h=800&fit=crop",
+    "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=600&h=800&fit=crop",
+    "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=600&h=800&fit=crop",
+    "https://images.unsplash.com/photo-1520813792240-56fc4a3765a7?w=600&h=800&fit=crop",
+    "https://images.unsplash.com/photo-1531123897727-8f129e1688ce?w=600&h=800&fit=crop"
 ]
 
-CACHE_DIR = "faces"
-os.makedirs(CACHE_DIR, exist_ok=True)
+
+def url_to_image(url):
+    response = requests.get(url)
+    image_array = np.asarray(bytearray(response.content), dtype=np.uint8)
+    image = cv2.imdecode(image_array, cv2.IMREAD_COLOR)
+    return image
 
 
-# -------------------------
-# DOWNLOAD FACE
-# -------------------------
-
-def download_face(url, index):
-
-    path = f"{CACHE_DIR}/face_{index}.jpg"
-
-    if not os.path.exists(path):
-
-        r = requests.get(url)
-
-        with open(path, "wb") as f:
-            f.write(r.content)
-
-    return path
+def get_embedding(img):
+    embedding = DeepFace.represent(
+        img_path=img,
+        model_name="SFace",
+        enforce_detection=False
+    )[0]["embedding"]
+    return embedding
 
 
-# -------------------------
-# SIMILARITY
-# -------------------------
+@app.post("/api/search")
+async def api_search(image: UploadFile = File(...)):
 
-def cosine_similarity(a, b):
-    return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
+    # Save uploaded image temporarily
+    temp = tempfile.NamedTemporaryFile(delete=False)
+    temp.write(await image.read())
+    temp.close()
 
-
-# -------------------------
-# SEARCH
-# -------------------------
-
-def search_faces(query_img):
-
-    FACE_POOL = [
-        "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=600&h=800&fit=crop",
-        "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=600&h=800&fit=crop",
-        "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=600&h=800&fit=crop",
-        "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=600&h=800&fit=crop"
-    ]
-
-    try:
-
-        query_embedding = DeepFace.represent(
-            img_path=query_img,
-            model_name="SFace",
-            enforce_detection=False
-        )[0]["embedding"]
-
-    except Exception as e:
-
-        return [{
-            "image": FACE_POOL[0],
-            "score": "ERROR: face detection failed"
-        }]
+    query_embedding = get_embedding(temp.name)
 
     results = []
 
@@ -98,56 +60,25 @@ def search_faces(query_img):
 
         try:
 
-            emb = DeepFace.represent(
-                img_path=url,
-                model_name="SFace",
-                enforce_detection=False
-            )[0]["embedding"]
+            face_img = url_to_image(url)
 
-            score = cosine_similarity(query_embedding, emb)
+            face_embedding = get_embedding(face_img)
 
-            percent = round(score * 100, 2)
+            similarity = cosine_similarity(
+                [query_embedding],
+                [face_embedding]
+            )[0][0]
 
-            results.append({
-                "image": url,
-                "score": percent
-            })
-
-        except Exception as e:
+            score = round(similarity * 100, 2)
 
             results.append({
                 "image": url,
-                "score": "processing error"
+                "score": score
             })
 
-    results.sort(key=lambda x: str(x["score"]), reverse=True)
+        except Exception:
+            continue
+
+    results.sort(key=lambda x: x["score"], reverse=True)
 
     return results
-
-# -------------------------
-# API
-# -------------------------
-
-@app.post("/api/search")
-
-async def api_search(image: UploadFile = File(...)):
-
-    temp_path = os.path.join(tempfile.gettempdir(), image.filename)
-
-    with open(temp_path, "wb") as f:
-        f.write(await image.read())
-
-    results = search_face(temp_path)
-
-    return {"results": results}
-
-
-# -------------------------
-# RUN
-# -------------------------
-
-if __name__ == "__main__":
-
-    port = int(os.environ.get("PORT", 10000))
-
-    uvicorn.run(app, host="0.0.0.0", port=port)
