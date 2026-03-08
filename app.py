@@ -49,6 +49,8 @@ async def api_search(image: UploadFile = File(...)):
 
     try:
 
+        import traceback
+
         temp = tempfile.NamedTemporaryFile(delete=False)
         temp.write(await image.read())
         temp.close()
@@ -64,18 +66,7 @@ async def api_search(image: UploadFile = File(...)):
             face_embedding = get_embedding(face_img)
 
             similarity = cosine_similarity(
-                [query_embedding],
-                [face_embedding]
-            )[0][0]
-
-            score = round(similarity * 100, 2)
-
-            results.append({
-                "image": url,
-                "score": score
-            })
-
-        results.sort(key=lambda x: x["score"], reverse=True)
+                [query
 
         return results
 
